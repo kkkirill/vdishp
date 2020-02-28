@@ -12,6 +12,7 @@ pandas = "*"
 matplotlib = "*"
 jupyter-core = "*"
 bleach = "*"
+nbformat = "==4.4.0"
 
 [requires]
 python_version = "3.8"

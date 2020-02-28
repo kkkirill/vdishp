@@ -1,6 +1,7 @@
 import abc
 import io
 from functools import wraps
+from pathlib import Path
 from typing import Optional, Tuple, Callable, Union, Any
 
 import pandas as pd
@@ -14,14 +15,12 @@ def df_not_empty(target: DataFrame):
         def wrapper(*args, **kwargs):
             if not target.empty:
                 return func(*args, **kwargs)
-
         return wrapper
-
     return inner
 
 
 class Command(abc.ABC):
-    def __init__(self, handler: Callable) -> None:
+    def __init__(self, handler: Callable[[Union[Widget, dict]], None]) -> None:
         self.handler = handler
 
     @abc.abstractmethod
@@ -55,7 +54,8 @@ class Publisher:
     def __init__(self) -> None:
         self.observers = dict()
 
-    def __call__(self, event: Union[dict, Widget]) -> None:  # dispatch method
+    def __call__(self, event: Union[dict, Widget]) -> None:
+        """Dispatch method"""
         if isinstance(event, dict):
             self.observers[event['owner'], event['type']](event)
         else:
@@ -74,7 +74,7 @@ class FileManager:
     ALLOWED_FILE_TYPES = ['json', 'csv']
 
     class __FileUploader:
-        """FileLoader mediator class"""
+        """FileUploader mediator class"""
 
         def __call__(self, content: bytes, file_ext: str) -> DataFrame:
             df = DataFrame()
@@ -88,13 +88,14 @@ class FileManager:
             return df
 
     class __FileDownloader:
-        """FileSaver mediator class"""
+        """FileDownloader mediator class"""
 
-        def __call__(self, data_frame: DataFrame, filepath: str, file_ext: str) -> Optional[str]:
+        def __call__(self, data_frame: DataFrame, filepath: Path, file_ext: str) -> Optional[str]:
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+
             if file_ext == 'json':
                 return data_frame.to_json(filepath)
-            else:
-                return data_frame.to_csv(filepath, index=False, header=True)
+            return data_frame.to_csv(filepath, index=False)
 
     def __init__(self) -> None:
         self.__uploader = self.__FileUploader()
@@ -102,12 +103,12 @@ class FileManager:
 
     def load_data(self, content: bytes, metadata: dict) -> Optional[DataFrame]:
         if not content:
-            return
+            return DataFrame()
         elif (file_ext := metadata.get('type').split('/')[-1]) in self.ALLOWED_FILE_TYPES:
             return self.__uploader(content, file_ext)
 
     def save_data(self, data_frame: DataFrame, filepath: str) -> Optional[str]:
-        file_ext = filepath.split('.')[-1]
+        path_obj = Path(filepath)
 
-        if file_ext in self.ALLOWED_FILE_TYPES:
-            return self.__downloader(data_frame, filepath, file_ext)
+        if (file_ext := path_obj.suffix[1:]) in self.ALLOWED_FILE_TYPES:
+            return self.__downloader(data_frame, path_obj, file_ext)
